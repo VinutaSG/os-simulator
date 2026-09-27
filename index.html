@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Core OS Simulator</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Top Navigation -->
+  <header id="top-bar">
+    <div class="logo">
+      <span class="icon">⚡</span>
+      <strong>OS Simulator Hub</strong>
+      <span class="badge">Jan 2026 Edition</span>
+    </div>
+    <div class="top-controls">
+      <div id="clock">00:00:00 AM</div>
+      <button class="theme-btn" id="theme-btn">🌙 Dark Mode</button>
+    </div>
+  </header>
+
+  <!-- Sidebar Navigation -->
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-title">MODULES</div>
+      <nav class="nav-menu">
+        <button class="nav-btn active" onclick="switchModule('cpu')">
+          <span class="nav-icon">⚙️</span> Process Scheduling
+        </button>
+        <button class="nav-btn" onclick="switchModule('memory')">
+          <span class="nav-icon">🧠</span> Memory (MFT / MVT)
+        </button>
+        <button class="nav-btn" onclick="switchModule('disk')">
+          <span class="nav-icon">💾</span> Disk Scheduling
+        </button>
+        <button class="nav-btn" onclick="switchModule('page')">
+          <span class="nav-icon">📄</span> Page Replacement
+        </button>
+        <button class="nav-btn" onclick="switchModule('sync')">
+          <span class="nav-icon">🔄</span> Synchronization
+        </button>
+      </nav>
+    </aside>
+
+    <!-- Main Simulator Area -->
+    <main class="content-area">
+
+      <!-- 1. CPU Scheduling Module -->
+      <section id="module-cpu" class="module-section active">
+        <h2>Process Scheduling</h2>
+        <p class="subtitle">Simulate real-world CPU scheduling algorithms and analyze execution metrics.</p>
+
+        <div class="control-panel">
+          <div class="form-group">
+            <label>Algorithm</label>
+            <select id="cpu-algo">
+              <option value="fcfs">First Come First Serve (FCFS)</option>
+              <option value="sjf">Shortest Job First (SJF - Non Preemptive)</option>
+              <option value="rr">Round Robin (RR)</option>
+              <option value="priority">Priority Scheduling</option>
+            </select>
+          </div>
+          <div class="form-group" id="quantum-group" style="display: none;">
+            <label>Time Quantum</label>
+            <input type="number" id="cpu-quantum" value="2" min="1">
+          </div>
+          <button class="btn primary-btn" onclick="runCpuScheduling()">Run Simulation</button>
+        </div>
+
+        <div class="table-container">
+          <table id="cpu-table">
+            <thead>
+              <tr>
+                <th>Process ID</th>
+                <th>Arrival Time</th>
+                <th>Burst Time</th>
+                <th>Priority</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>P1</td>
+                <td><input type="number" value="0" class="arrival-time"></td>
+                <td><input type="number" value="5" class="burst-time"></td>
+                <td><input type="number" value="2" class="priority-val"></td>
+                <td><button class="btn-danger" onclick="removeRow(this)">Remove</button></td>
+              </tr>
+              <tr>
+                <td>P2</td>
+                <td><input type="number" value="1" class="arrival-time"></td>
+                <td><input type="number" value="3" class="burst-time"></td>
+                <td><input type="number" value="1" class="priority-val"></td>
+                <td><button class="btn-danger" onclick="removeRow(this)">Remove</button></td>
+              </tr>
+            </tbody>
+          </table>
+          <button class="btn secondary-btn" onclick="addCpuProcess()">+ Add Process</button>
+        </div>
+
+        <div class="results-card" id="cpu-results" style="display: none;">
+          <h3>Gantt Chart Visualizer</h3>
+          <div class="gantt-chart" id="gantt-chart"></div>
+          <div class="metrics-grid" id="cpu-metrics"></div>
+        </div>
+      </section>
+
+      <!-- 2. Memory Management Module -->
+      <section id="module-memory" class="module-section">
+        <h2>Memory Management (MFT / MVT)</h2>
+        <p class="subtitle">Dynamic dynamic allocation strategies with optimization visualization.</p>
+
+        <div class="control-panel">
+          <div class="form-group">
+            <label>Partition Scheme</label>
+            <select id="mem-scheme">
+              <option value="mvt">Variable Partitioning (MVT)</option>
+              <option value="mft">Fixed Partitioning (MFT)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Allocation Strategy</label>
+            <select id="mem-strategy">
+              <option value="first">First Fit</option>
+              <option value="best">Best Fit</option>
+              <option value="worst">Worst Fit</option>
+              <option value="next">Next Fit</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Total Memory Size (MB)</label>
+            <input type="number" id="mem-total-size" value="1000">
+          </div>
+          <button class="btn primary-btn" onclick="runMemoryAllocation()">Allocate Memory</button>
+        </div>
+
+        <div class="memory-input-group">
+          <div class="form-group">
+            <label>Process Request Size (MB)</label>
+            <input type="number" id="mem-req-size" placeholder="e.g. 250">
+          </div>
+          <button class="btn secondary-btn" onclick="requestMemory()">Submit Request</button>
+        </div>
+
+        <div class="results-card">
+          <h3>Memory Layout Map</h3>
+          <div class="memory-visualizer" id="memory-map"></div>
+          <div class="metrics-grid" id="mem-metrics"></div>
+        </div>
+      </section>
+
+      <!-- 3. Disk Scheduling Module -->
+      <section id="module-disk" class="module-section">
+        <h2>Disk Scheduling Algorithms</h2>
+        <p class="subtitle">Visualize head movement and seek time reductions across I/O requests.</p>
+
+        <div class="control-panel">
+          <div class="form-group">
+            <label>Algorithm</label>
+            <select id="disk-algo">
+              <option value="fcfs">FCFS</option>
+              <option value="sstf">SSTF (Shortest Seek Time First)</option>
+              <option value="scan">SCAN (Elevator)</option>
+              <option value="look">LOOK</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Initial Head Position</label>
+            <input type="number" id="disk-head" value="50">
+          </div>
+          <div class="form-group">
+            <label>Track Queue (comma separated)</label>
+            <input type="text" id="disk-queue" value="98, 183, 37, 122, 14, 124, 65, 67">
+          </div>
+          <button class="btn primary-btn" onclick="runDiskScheduling()">Simulate Head</button>
+        </div>
+
+        <div class="results-card" id="disk-results" style="display: none;">
+          <h3>Seek Sequence Execution</h3>
+          <div class="sequence-display" id="disk-sequence"></div>
+          <div class="metrics-grid" id="disk-metrics"></div>
+        </div>
+      </section>
+
+      <!-- 4. Page Replacement Module -->
+      <section id="module-page" class="module-section">
+        <h2>Page Replacement Simulator</h2>
+        <p class="subtitle">Evaluate page fault ratios across various frame capacities.</p>
+
+        <div class="control-panel">
+          <div class="form-group">
+            <label>Algorithm</label>
+            <select id="page-algo">
+              <option value="fifo">FIFO (First In First Out)</option>
+              <option value="lru">LRU (Least Recently Used)</option>
+              <option value="optimal">Optimal Page Replacement</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Number of Frames</label>
+            <input type="number" id="page-frames" value="3" min="1" max="7">
+          </div>
+          <div class="form-group">
+            <label>Reference String</label>
+            <input type="text" id="page-ref-string" value="7, 0, 1, 2, 0, 3, 0, 4, 2, 3">
+          </div>
+          <button class="btn primary-btn" onclick="runPageReplacement()">Run Simulation</button>
+        </div>
+
+        <div class="results-card" id="page-results" style="display: none;">
+          <h3>Execution Matrix</h3>
+          <div class="table-container">
+            <table class="page-matrix-table" id="page-matrix"></table>
+          </div>
+          <div class="metrics-grid" id="page-metrics"></div>
+        </div>
+      </section>
+
+      <!-- 5. Synchronization Module -->
+      <section id="module-sync" class="module-section">
+        <h2>Process Synchronization</h2>
+        <p class="subtitle">Classic Producer-Consumer visualizer utilizing semaphores (Mutex, Empty, Full).</p>
+
+        <div class="control-panel">
+          <button class="btn primary-btn" onclick="produceItem()">Produce Item</button>
+          <button class="btn danger-btn" onclick="consumeItem()">Consume Item</button>
+        </div>
+
+        <div class="sync-grid">
+          <div class="sync-card">
+            <h3>Bounded Buffer (Cap: 5)</h3>
+            <div class="buffer-container" id="buffer-container"></div>
+          </div>
+          <div class="sync-card">
+            <h3>Semaphore Status</h3>
+            <div class="semaphore-status" id="semaphore-status">
+              <div><strong>Mutex:</strong> <span id="sem-mutex">1</span></div>
+              <div><strong>Empty:</strong> <span id="sem-empty">5</span></div>
+              <div><strong>Full:</strong> <span id="sem-full">0</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
