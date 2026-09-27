@@ -1,36 +1,46 @@
 // Clock and Navigation
 setInterval(() => {
-  document.getElementById('clock').innerText = new Date().toLocaleTimeString();
+  const clockEl = document.getElementById('clock');
+  if (clockEl) clockEl.innerText = new Date().toLocaleTimeString();
 }, 1000);
 
-document.getElementById('theme-btn').addEventListener('click', () => {
-  const body = document.body;
-  if (body.getAttribute('data-theme') === 'light') {
-    body.removeAttribute('data-theme');
-    document.getElementById('theme-btn').innerText = '🌙 Dark Mode';
-  } else {
-    body.setAttribute('data-theme', 'light');
-    document.getElementById('theme-btn').innerText = '☀️ Light Mode';
-  }
-});
+const themeBtn = document.getElementById('theme-btn');
+if (themeBtn) {
+  themeBtn.addEventListener('click', () => {
+    const body = document.body;
+    if (body.getAttribute('data-theme') === 'light') {
+      body.removeAttribute('data-theme');
+      themeBtn.innerText = '🌙 Dark Mode';
+    } else {
+      body.setAttribute('data-theme', 'light');
+      themeBtn.innerText = '☀️ Light Mode';
+    }
+  });
+}
 
 function switchModule(modName) {
   document.querySelectorAll('.module-section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   
-  document.getElementById(`module-${modName}`).classList.add('active');
-  event.currentTarget.classList.add('active');
+  const targetModule = document.getElementById(`module-${modName}`);
+  if (targetModule) targetModule.classList.add('active');
+  if (event && event.currentTarget) event.currentTarget.classList.add('active');
 }
 
-document.getElementById('cpu-algo').addEventListener('change', (e) => {
-  document.getElementById('quantum-group').style.display = e.target.value === 'rr' ? 'flex' : 'none';
-});
+const cpuAlgoSelect = document.getElementById('cpu-algo');
+if (cpuAlgoSelect) {
+  cpuAlgoSelect.addEventListener('change', (e) => {
+    const quantumGroup = document.getElementById('quantum-group');
+    if (quantumGroup) quantumGroup.style.display = e.target.value === 'rr' ? 'flex' : 'none';
+  });
+}
 
 // Process Scheduling Module
 let processCount = 2;
 function addCpuProcess() {
   processCount++;
   const tbody = document.querySelector('#cpu-table tbody');
+  if (!tbody) return;
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td>P${processCount}</td>
@@ -48,11 +58,12 @@ function removeRow(btn) {
 
 function runCpuScheduling() {
   const algo = document.getElementById('cpu-algo').value;
+  const quantum = parseInt(document.getElementById('cpu-quantum').value) || 2;
   const rows = document.querySelectorAll('#cpu-table tbody tr');
-  let processes = [];
-
+  
+  let rawProcesses = [];
   rows.forEach((row, i) => {
-    processes.push({
+    rawProcesses.push({
       id: row.cells[0].innerText,
       arrival: parseInt(row.querySelector('.arrival-time').value) || 0,
       burst: parseInt(row.querySelector('.burst-time').value) || 1,
@@ -61,33 +72,160 @@ function runCpuScheduling() {
   });
 
   let schedule = [];
-  let currentTime = 0;
+  let completionTimes = {};
+  let totalProcesses = rawProcesses.length;
 
-  // Simple FCFS Simulation Engine Logic
-  processes.sort((a, b) => a.arrival - b.arrival);
-  processes.forEach(p => {
-    if (currentTime < p.arrival) currentTime = p.arrival;
-    schedule.push({ id: p.id, start: currentTime, duration: p.burst });
-    currentTime += p.burst;
+  if (algo === 'fcfs') {
+    let proc = [...rawProcesses].sort((a, b) => a.arrival - b.arrival);
+    let curr = 0;
+    proc.forEach(p => {
+      if (curr < p.arrival) {
+        schedule.push({ id: 'Idle', start: curr, duration: p.arrival - curr });
+        curr = p.arrival;
+      }
+      schedule.push({ id: p.id, start: curr, duration: p.burst });
+      curr += p.burst;
+      completionTimes[p.id] = curr;
+    });
+  } 
+  else if (algo === 'sjf') { // Non-preemptive SJF
+    let uncompleted = rawProcesses.map(p => ({ ...p }));
+    let curr = 0;
+    let completedCount = 0;
+
+    while (completedCount < totalProcesses) {
+      let available = uncompleted.filter(p => p.arrival <= curr && !p.done);
+      if (available.length === 0) {
+        let nextArrival = Math.min(...uncompleted.filter(p => !p.done).map(p => p.arrival));
+        schedule.push({ id: 'Idle', start: curr, duration: nextArrival - curr });
+        curr = nextArrival;
+        continue;
+      }
+      available.sort((a, b) => a.burst - b.burst || a.arrival - b.arrival);
+      let p = available[0];
+      schedule.push({ id: p.id, start: curr, duration: p.burst });
+      curr += p.burst;
+      completionTimes[p.id] = curr;
+      p.done = true;
+      completedCount++;
+    }
+  } 
+  else if (algo === 'priority') { // Non-preemptive Priority (Lower number = Higher Priority)
+    let uncompleted = rawProcesses.map(p => ({ ...p }));
+    let curr = 0;
+    let completedCount = 0;
+
+    while (completedCount < totalProcesses) {
+      let available = uncompleted.filter(p => p.arrival <= curr && !p.done);
+      if (available.length === 0) {
+        let nextArrival = Math.min(...uncompleted.filter(p => !p.done).map(p => p.arrival));
+        schedule.push({ id: 'Idle', start: curr, duration: nextArrival - curr });
+        curr = nextArrival;
+        continue;
+      }
+      available.sort((a, b) => a.priority - b.priority || a.arrival - b.arrival);
+      let p = available[0];
+      schedule.push({ id: p.id, start: curr, duration: p.burst });
+      curr += p.burst;
+      completionTimes[p.id] = curr;
+      p.done = true;
+      completedCount++;
+    }
+  } 
+  else if (algo === 'rr') { // Round Robin
+    let queue = [];
+    let procMap = {};
+    rawProcesses.forEach(p => {
+      procMap[p.id] = { ...p, remBurst: p.burst, inQueue: false };
+    });
+
+    let curr = 0;
+    let completedCount = 0;
+    let sortedArrivals = [...rawProcesses].sort((a, b) => a.arrival - b.arrival);
+
+    // Add first arrived processes
+    let addArrivals = () => {
+      sortedArrivals.forEach(p => {
+        if (p.arrival <= curr && !procMap[p.id].inQueue && procMap[p.id].remBurst > 0) {
+          queue.push(p.id);
+          procMap[p.id].inQueue = true;
+        }
+      });
+    };
+
+    addArrivals();
+
+    while (completedCount < totalProcesses) {
+      if (queue.length === 0) {
+        let remaining = Object.values(procMap).filter(p => p.remBurst > 0);
+        if (remaining.length > 0) {
+          let nextArr = Math.min(...remaining.map(p => p.arrival));
+          schedule.push({ id: 'Idle', start: curr, duration: nextArr - curr });
+          curr = nextArr;
+          addArrivals();
+        }
+        continue;
+      }
+
+      let pid = queue.shift();
+      let p = procMap[pid];
+      let execTime = Math.min(p.remBurst, quantum);
+
+      schedule.push({ id: p.id, start: curr, duration: execTime });
+      curr += execTime;
+      p.remBurst -= execTime;
+
+      addArrivals();
+
+      if (p.remBurst > 0) {
+        queue.push(p.id);
+      } else {
+        completionTimes[p.id] = curr;
+        completedCount++;
+      }
+    }
+  }
+
+  // Calculate Metrics
+  let totalWT = 0;
+  let totalTAT = 0;
+
+  rawProcesses.forEach(p => {
+    let tat = completionTimes[p.id] - p.arrival;
+    let wt = tat - p.burst;
+    totalTAT += tat;
+    totalWT += wt;
   });
+
+  let avgWT = (totalWT / totalProcesses).toFixed(2);
+  let avgTAT = (totalTAT / totalProcesses).toFixed(2);
 
   // Render Gantt Chart
   const chart = document.getElementById('gantt-chart');
   chart.innerHTML = '';
-  const colors = ['#38bdf8', '#818cf8', '#c084fc', '#f472b6', '#34d399'];
+  const colorPalette = {
+    'Idle': '#64748b',
+    'P1': '#38bdf8',
+    'P2': '#818cf8',
+    'P3': '#c084fc',
+    'P4': '#f472b6',
+    'P5': '#34d399',
+    'P6': '#fbbf24'
+  };
 
-  schedule.forEach((block, idx) => {
+  schedule.forEach((block) => {
     const div = document.createElement('div');
     div.className = 'gantt-block';
-    div.style.width = `${block.duration * 20}px`;
-    div.style.backgroundColor = colors[idx % colors.length];
-    div.innerText = `${block.id} (${block.duration}s)`;
+    div.style.width = `${Math.max(block.duration * 30, 45)}px`;
+    div.style.backgroundColor = colorPalette[block.id] || '#0284c7';
+    div.innerText = `${block.id} (${block.start}-${block.start + block.duration})`;
     chart.appendChild(div);
   });
 
   document.getElementById('cpu-metrics').innerHTML = `
-    <div class="metric-box"><div>Total Execution Time</div><div>${currentTime} ms</div></div>
-    <div class="metric-box"><div>Completed Processes</div><div>${processes.length}</div></div>
+    <div class="metric-box"><div>Avg Waiting Time</div><div>${avgWT} ms</div></div>
+    <div class="metric-box"><div>Avg Turnaround Time</div><div>${avgTAT} ms</div></div>
+    <div class="metric-box"><div>Total Time</div><div>${schedule.length ? schedule[schedule.length-1].start + schedule[schedule.length-1].duration : 0} ms</div></div>
   `;
   document.getElementById('cpu-results').style.display = 'block';
 }
@@ -117,6 +255,14 @@ function requestMemory() {
         blockIndex = idx;
       }
     });
+  } else if (strategy === 'worst') {
+    let worstSize = -1;
+    memoryBlocks.forEach((b, idx) => {
+      if (!b.allocated && b.size >= size && b.size > worstSize) {
+        worstSize = b.size;
+        blockIndex = idx;
+      }
+    });
   }
 
   if (blockIndex !== -1) {
@@ -135,6 +281,7 @@ function requestMemory() {
 
 function renderMemoryMap() {
   const map = document.getElementById('memory-map');
+  if (!map) return;
   map.innerHTML = '';
   const total = parseInt(document.getElementById('mem-total-size').value) || 1000;
 
@@ -161,11 +308,16 @@ function runDiskScheduling() {
   }
 
   const seqContainer = document.getElementById('disk-sequence');
-  seqContainer.innerHTML = sequence.map(val => `<span class="seq-node">${val}</span>`).join(' ➔ ');
+  if (seqContainer) {
+    seqContainer.innerHTML = sequence.map(val => `<span class="seq-node">${val}</span>`).join(' ➔ ');
+  }
 
-  document.getElementById('disk-metrics').innerHTML = `
-    <div class="metric-box"><div>Total Head Movements</div><div>${totalSeek} Cylinders</div></div>
-  `;
+  const diskMetrics = document.getElementById('disk-metrics');
+  if (diskMetrics) {
+    diskMetrics.innerHTML = `
+      <div class="metric-box"><div>Total Head Movements</div><div>${totalSeek} Cylinders</div></div>
+    `;
+  }
   document.getElementById('disk-results').style.display = 'block';
 }
 
@@ -186,7 +338,7 @@ function runPageReplacement() {
       if (frames.length < framesCount) {
         frames.push(page);
       } else {
-        frames.shift(); // FIFO implementation
+        frames.shift(); // FIFO replacement
         frames.push(page);
       }
     }
@@ -194,21 +346,26 @@ function runPageReplacement() {
   });
 
   const table = document.getElementById('page-matrix');
-  table.innerHTML = `<tr><th>Ref</th>${pages.map(p => `<th>${p}</th>`).join('')}</tr>`;
-  
-  for (let f = 0; f < framesCount; f++) {
-    let row = `<tr><td>Frame ${f+1}</td>`;
-    matrix.forEach(step => {
-      row += `<td>${step.state[f] || '-'}</td>`;
-    });
-    row += '</tr>';
-    table.innerHTML += row;
+  if (table) {
+    table.innerHTML = `<tr><th>Ref</th>${pages.map(p => `<th>${p}</th>`).join('')}</tr>`;
+    
+    for (let f = 0; f < framesCount; f++) {
+      let row = `<tr><td>Frame ${f+1}</td>`;
+      matrix.forEach(step => {
+        row += `<td>${step.state[f] || '-'}</td>`;
+      });
+      row += '</tr>';
+      table.innerHTML += row;
+    }
   }
 
-  document.getElementById('page-metrics').innerHTML = `
-    <div class="metric-box"><div>Total Page Faults</div><div>${pageFaults}</div></div>
-    <div class="metric-box"><div>Hit Ratio</div><div>${(((pages.length - pageFaults) / pages.length) * 100).toFixed(1)}%</div></div>
-  `;
+  const pageMetrics = document.getElementById('page-metrics');
+  if (pageMetrics) {
+    pageMetrics.innerHTML = `
+      <div class="metric-box"><div>Total Page Faults</div><div>${pageFaults}</div></div>
+      <div class="metric-box"><div>Hit Ratio</div><div>${(((pages.length - pageFaults) / pages.length) * 100).toFixed(1)}%</div></div>
+    `;
+  }
   document.getElementById('page-results').style.display = 'block';
 }
 
@@ -218,6 +375,7 @@ const BUFFER_CAPACITY = 5;
 
 function updateSyncUI() {
   const container = document.getElementById('buffer-container');
+  if (!container) return;
   container.innerHTML = '';
   
   for (let i = 0; i < BUFFER_CAPACITY; i++) {
@@ -250,6 +408,6 @@ function consumeItem() {
   }
 }
 
-// Initialize default view
+// Initializations
 runMemoryAllocation();
 updateSyncUI();
